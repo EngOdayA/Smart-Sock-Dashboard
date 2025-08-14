@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Sock Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f6fa;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+    }
+    #sensors {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .sensor-card {
+      background: #fff;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    canvas {
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Smart Sock Dashboard</h1>
+<div id="sensors"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const firebaseURL = "https://sock-sensor-data-default-rtdb.firebaseio.com/sensors.json"; // update if different
+const updateInterval = 1000; // 1 second
+let charts = {};
+let dataHistory = {};
+
+async function fetchSensorData() {
+  try {
+    const res = await fetch(firebaseURL);
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error("Failed to fetch sensor data:", err);
+    return null;
+  }
+}
+
+function createSensorCard(sensorName, value) {
+  const container = document.getElementById("sensors");
+  const card = document.createElement("div");
+  card.className = "sensor-card";
+  card.id = `card-${sensorName}`;
+
+  const title = document.createElement("h3");
+  title.innerText = sensorName;
+  card.appendChild(title);
+
+  const valueEl = document.createElement("p");
+  valueEl.id = `value-${sensorName}`;
+  valueEl.innerText = value;
+  card.appendChild(valueEl);
+
+  const canvas = document.createElement("canvas");
+  canvas.id = `chart-${sensorName}`;
+  card.appendChild(canvas);
+
+  container.appendChild(card);
+
+  // initialize chart
+  dataHistory[sensorName] = [];
+  const ctx = canvas.getContext("2d");
+  charts[sensorName] = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [{
+        label: sensorName,
+        data: [],
+        borderColor: 'rgba(75, 192, 192, 1)',
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        tension: 0.2,
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { display: false },
+        y: { beginAtZero: true }
+      }
+    }
+  });
+}
+
+function updateSensorCard(sensorName, value) {
+  const valueEl = document.getElementById(`value-${sensorName}`);
+  if(valueEl) valueEl.innerText = value;
+
+  // update chart
+  if(charts[sensorName]){
+    const history = dataHistory[sensorName];
+    history.push(value);
+    if(history.length > 50) history.shift(); // keep last 50 readings
+
+    charts[sensorName].data.labels = history.map((_, i) => i+1);
+    charts[sensorName].data.datasets[0].data = history;
+    charts[sensorName].update();
+  }
+}
+
+async function refresh() {
+  const data = await fetchSensorData();
+  if(!data) return;
+
+  Object.keys(data).forEach(sensorName => {
+    const value = data[sensorName];
+
+    if(!document.getElementById(`card-${sensorName}`)){
+      createSensorCard(sensorName, value);
+    } else {
+      updateSensorCard(sensorName, value);
+    }
+  });
+}
+
+// refresh every second
+setInterval(refresh, updateInterval);
+
+// initial load
+refresh();
+</script>
+
+</body>
+</html>
